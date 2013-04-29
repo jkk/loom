@@ -3,7 +3,8 @@ Graph, Digraph, or WeightedGraph protocols (as appropriate per algorithm)
 can use these functions."
       :author "Justin Kramer"}
   loom.alg
-  (:require [loom.alg-generic :as gen])
+  (:require [loom.alg-generic :as gen]
+            [loom.flow :as flow])
   (:use [loom.graph
          :only [add-edges nodes edges neighbors weight incoming degree
                 in-degree weighted? directed? graph transpose]
@@ -158,10 +159,89 @@ can use these functions."
   [g start end]
   (first (dijkstra-path-dist g start end)))
 
+(defn- can-relax-edge?
+  "Test for whether we can improve the shortest path to v found so far
+   by going through u."
+  [[u v :as edge] weight costs]
+  (let [vd (get costs v)
+        ud (get costs u)
+        sum (+ ud weight)]
+    (if (> vd sum)
+      true
+      false)))
+
+(defn- relax-edge
+  "If there's a shorter path from s to v via u,
+    update our map of estimated path costs and
+   map of paths from source to vertex v"
+  [[u v :as edge] weight [costs paths :as estimates]]
+  (let [ud (get costs u)
+        sum (+ ud weight)]
+    (if (can-relax-edge? edge weight costs)
+      [(assoc costs v sum) (assoc paths v u)]
+      estimates
+      )))
+
+(defn- relax-edges
+  "Performs edge relaxation on all edges in weighted directed graph"
+  [g start estimates]
+  (->> (edges g)
+       (reduce (fn [estimates [u v :as edge]]
+                 (relax-edge edge (wt g u v) estimates))
+               estimates)))
+
+(defn- init-estimates
+  "Initializes path cost estimates and paths from source to all vertices,
+   for Bellman-Ford algorithm"
+  [graph start]
+  (let [nodes (disj (nodes graph) start)
+        path-costs {start 0}
+        paths {start nil}
+        infinities (repeat Double/POSITIVE_INFINITY)
+        nils (repeat nil)
+        init-costs (interleave nodes infinities)
+        init-paths (interleave nodes nils)]
+    [(apply assoc path-costs init-costs)
+     (apply assoc paths init-paths)]))
+
 
 ;;;
 ;;; Graph algorithms
 ;;;
+
+(defn bellman-ford
+  "Given a weighted, directed graph G = (V, E) with source start,
+   the Bellman-Ford algorithm produces map of single source shortest paths and their costs
+   if no negative-weight cycle that is reachable from the source exits,
+   and false otherwise, indicating that no solution exists."
+  [g start]
+  (let [initial-estimates (init-estimates g start)
+        ;relax-edges is calculated for all edges V-1 times
+        [costs paths] (reduce (fn [estimates _]
+                                (relax-edges g start estimates))
+                              initial-estimates
+                              (-> g nodes count dec range))
+        edges (edges g)]
+      (if (some
+            (fn [[u v :as edge]]
+              (can-relax-edge? edge (wt g u v) costs))
+            edges)
+        false
+        [costs 
+         (->> (keys paths)
+              ;remove vertices that are unreachable from source
+              (remove #(= Double/POSITIVE_INFINITY (get costs %))) 
+              (reduce
+                (fn [final-paths v]
+                  (assoc final-paths v
+                         ; follows the parent pointers
+                         ; to construct path from source to node v
+                         (loop [node v
+                                path ()]
+                           (if node
+                             (recur (get paths node) (cons node path))
+                             path))))
+                {}))])))
 
 (defn dag?
   "Return true if g is a directed acyclic graph"
@@ -324,4 +404,23 @@ can use these functions."
      [#{} #{}]
      coloring)))
 
+(defn max-flow
+  "Returns [flow-map flow-value], where flow-map is a weighted adjacency map
+   representing the maximum flow.  The argument should be a weighted digraph,
+   where the edge weights are flow capacities.  Source and sink are the vertices
+   representing the flow source and sink vertices.  Optionally, pass in
+     :method :algorithm to use.  Currently, the only option is :edmonds-karp ."
+  [g source sink & {:keys [method] :or {method :edmonds-karp}}]
+  (let [method-set #{:edmonds-karp}
+        n (nb g), i (incoming g), c (wt g), s source, t sink
+        [flow-map flow-value] (case method
+                                    :edmonds-karp (flow/edmonds-karp n i c s t)
+                                    (throw
+                                     (java.lang.RuntimeException.
+                                      (str "Method not found.  Choose from: "
+                                                 method-set))))]
+    [flow-map flow-value]))
+                                                   
+                                                   
+                                                        
 ;; TODO: MST, coloring, matching, etc etc
