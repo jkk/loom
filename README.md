@@ -1,10 +1,10 @@
-# Loom
+![Loom logo](https://raw.github.com/aysylu/loom/master/doc/loom_logo.png "Loom")
 
 **Caveat coder**: this lib is alpha-stage. The API may change in future versions.
 
 This library is based off of Justin Kramer's Loom library.
 
-Contact: [robertlachlan@gmail.com](mailto:robertlachlan@gmail.com).
+Contact: email [robertlachlan@gmail.com](mailto:robertlachlan@gmail.com), [aysylu7 [at] gmail [dot] com](mailto:aysylu7@gmail.com), twitter: [aysylu22](http://twitter.com/aysylu22)
 
 ## Usage
 
